@@ -1,0 +1,477 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#0f3d3a">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="환율 10년">
+<title>환율 10년 비교</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=IBM+Plex+Sans+KR:wght@400;500;700&family=IBM+Plex+Mono:wght@500;600&display=swap">
+<!-- 국기 SVG (Windows는 국기 이모지를 글자로만 보여줘서 이미지로 씀) -->
+<link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/flag-icons@7.2.3/css/flag-icons.min.css">
+<style>
+/* 레이아웃: 한 손 세로 스크롤 - 현재 환율 → 판정 → 차트 → 통계표 */
+:root {
+  --bg: #f3f6f5;
+  --surface: #ffffff;
+  --fg: #14211f;
+  --muted: #5d6f6c;
+  --line: #d9e2e0;
+  --accent: #0f6b62;
+  --cheap: #1b7f4b;
+  --dear: #b8452f;
+  --band: rgba(15, 107, 98, 0.08);
+  --font-body: "IBM Plex Sans KR", "Apple SD Gothic Neo", "Malgun Gothic", sans-serif;
+  --font-num: "IBM Plex Mono", ui-monospace, "Consolas", monospace;
+  color-scheme: light;
+}
+@media (prefers-color-scheme: dark) {
+  :root:not([data-theme="light"]) {
+    --bg: #0d1514; --surface: #15201f; --fg: #e3ecea; --muted: #8fa3a0; --line: #263533;
+    --accent: #4fc2b3; --cheap: #5fcf8f; --dear: #f0866e; --band: rgba(79, 194, 179, 0.10);
+    color-scheme: dark;
+  }
+}
+:root[data-theme="dark"] {
+  --bg: #0d1514; --surface: #15201f; --fg: #e3ecea; --muted: #8fa3a0; --line: #263533;
+  --accent: #4fc2b3; --cheap: #5fcf8f; --dear: #f0866e; --band: rgba(79, 194, 179, 0.10);
+  color-scheme: dark;
+}
+* { box-sizing: border-box; }
+html { padding-top: env(safe-area-inset-top, 0px); padding-bottom: env(safe-area-inset-bottom, 0px); }
+body {
+  margin: 0; background: var(--bg); color: var(--fg);
+  font-family: var(--font-body); font-size: 15px; line-height: 1.5;
+  -webkit-text-size-adjust: 100%;
+}
+.wrap { max-width: 560px; margin: 0 auto; padding-inline: 16px; padding-block: 16px 32px; display: flex; flex-direction: column; gap: 16px; }
+header { display: flex; align-items: center; justify-content: space-between; gap: 12px; flex-wrap: wrap; }
+h1 { font-size: 18px; margin: 0; letter-spacing: -0.01em; }
+.sub { color: var(--muted); font-size: 12px; }
+select, button {
+  font: inherit; color: var(--fg); background: var(--surface);
+  border: 1px solid var(--line); border-radius: 10px; padding: 8px 12px; min-height: 40px;
+}
+button { cursor: pointer; }
+select:focus-visible, button:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+/* 통화 목록: 한 줄 가로 스크롤 (17개를 줄바꿈하면 화면 절반을 차지함) */
+.chips {
+  display: flex; gap: 6px; overflow-x: auto; scroll-snap-type: x proximity;
+  margin-inline: -16px; padding-inline: 16px; padding-block: 2px 6px;
+  scrollbar-width: thin;
+}
+.chip {
+  flex: 0 0 auto; scroll-snap-align: start;
+  display: inline-flex; align-items: center; gap: 7px;
+  padding: 6px 12px 6px 8px; min-height: 40px; border-radius: 999px; font-size: 14px; white-space: nowrap;
+}
+.chip b { font-family: var(--font-num); font-size: 12px; font-weight: 600; color: var(--muted); }
+.chip[aria-pressed="true"] { background: var(--accent); border-color: var(--accent); color: var(--bg); font-weight: 600; }
+.chip[aria-pressed="true"] b { color: inherit; opacity: .8; }
+.chip em { font-style: normal; font-family: var(--font-num); font-size: 11px; font-weight: 600; color: var(--muted); }
+.chip em.cheap { color: var(--cheap); }
+.chip em.dear { color: var(--dear); }
+.chip[aria-pressed="true"] em { color: inherit; }
+.chip[disabled] { opacity: .45; cursor: not-allowed; }
+.fi { width: 1.4em; line-height: 1em; border-radius: 3px; box-shadow: 0 0 0 1px var(--line); flex: 0 0 auto; background-size: cover; }
+.cur-head { display: flex; align-items: center; gap: 8px; }
+.cur-head .fi { font-size: 18px; }
+
+.hero { background: var(--surface); border: 1px solid var(--line); border-radius: 16px; padding: 20px; display: flex; flex-direction: column; gap: 6px; }
+.label { font-size: 12px; color: var(--muted); letter-spacing: 0.04em; }
+.now { font-family: var(--font-num); font-size: 40px; font-weight: 600; letter-spacing: -0.02em; font-variant-numeric: tabular-nums; line-height: 1.1; }
+.now small { font-family: var(--font-body); font-size: 15px; font-weight: 500; color: var(--muted); margin-left: 4px; }
+.verdict { display: inline-flex; align-self: flex-start; align-items: center; gap: 6px; padding: 4px 10px; border-radius: 999px; font-size: 13px; font-weight: 600; border: 1px solid currentColor; }
+.verdict.cheap { color: var(--cheap); }
+.verdict.dear { color: var(--dear); }
+.verdict.mid { color: var(--muted); }
+
+.compare { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+.cmp { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 2px; min-width: 0; }
+.cmp .v { font-family: var(--font-num); font-size: 20px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.diff { font-family: var(--font-num); font-size: 13px; font-variant-numeric: tabular-nums; }
+.diff.up { color: var(--dear); }
+.diff.down { color: var(--cheap); }
+
+.gauge { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 14px; display: flex; flex-direction: column; gap: 8px; }
+.bar { position: relative; height: 10px; border-radius: 999px; background: linear-gradient(90deg, var(--cheap), var(--line) 50%, var(--dear)); }
+.pin { position: absolute; top: -5px; width: 4px; height: 20px; border-radius: 2px; background: var(--fg); transform: translateX(-2px); }
+.ends { display: flex; justify-content: space-between; font-family: var(--font-num); font-size: 12px; color: var(--muted); font-variant-numeric: tabular-nums; }
+
+.chart { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 12px; }
+canvas { width: 100%; height: 220px; display: block; touch-action: pan-y; }
+.legend { display: flex; gap: 14px; flex-wrap: wrap; font-size: 12px; color: var(--muted); padding: 6px 4px 0; }
+.legend i { display: inline-block; width: 14px; height: 0; border-top: 2px solid; vertical-align: middle; margin-right: 4px; }
+
+table { width: 100%; border-collapse: collapse; font-size: 14px; }
+td { padding: 9px 4px; border-bottom: 1px solid var(--line); }
+td:last-child { text-align: right; font-family: var(--font-num); font-variant-numeric: tabular-nums; }
+tr:last-child td { border-bottom: 0; }
+.stats { background: var(--surface); border: 1px solid var(--line); border-radius: 14px; padding: 6px 14px; }
+
+.status { font-size: 13px; color: var(--muted); }
+.status.err { color: var(--dear); }
+footer { font-size: 12px; color: var(--muted); line-height: 1.6; }
+@media (prefers-reduced-motion: no-preference) { .pin { transition: left .4s ease; } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header>
+    <div>
+      <h1>환율 10년 비교</h1>
+      <div class="sub" id="range">최근 10년 일별 기준환율</div>
+    </div>
+    <button id="refresh" type="button">새로고침</button>
+  </header>
+
+  <div class="chips" id="chips" role="group" aria-label="통화 선택"></div>
+
+  <section class="hero" aria-live="polite">
+    <div class="cur-head"><span class="fi" id="heroFlag"></span><span class="label" id="nowLabel">현재 환율</span></div>
+    <div class="now" id="now">–<small></small></div>
+    <span class="verdict mid" id="verdict">불러오는 중</span>
+    <span class="status" id="status"></span>
+  </section>
+
+  <section class="compare">
+    <div class="cmp">
+      <span class="label">10년 평균</span>
+      <span class="v" id="mean">–</span>
+      <span class="diff" id="meanDiff"></span>
+    </div>
+    <div class="cmp">
+      <span class="label">10년 중앙값</span>
+      <span class="v" id="median">–</span>
+      <span class="diff" id="medianDiff"></span>
+    </div>
+  </section>
+
+  <section class="gauge">
+    <span class="label" id="pctLabel">10년 중 위치</span>
+    <div class="bar"><span class="pin" id="pin" style="left:50%"></span></div>
+    <div class="ends"><span id="minV">최저</span><span id="maxV">최고</span></div>
+  </section>
+
+  <section class="chart">
+    <canvas id="cv" aria-label="10년 환율 추이 차트" role="img"></canvas>
+    <div class="legend">
+      <span><i style="border-color:var(--accent)"></i>환율</span>
+      <span><i style="border-color:var(--dear);border-top-style:dashed"></i>평균</span>
+      <span><i style="border-color:var(--cheap);border-top-style:dashed"></i>중앙값</span>
+    </div>
+  </section>
+
+  <section class="stats">
+    <table>
+      <tbody id="tbl"></tbody>
+    </table>
+  </section>
+
+  <footer id="foot"></footer>
+</div>
+
+<script>
+const API = "https://api.frankfurter.dev/v1";
+// flag: flag-icons 국가코드, unit: 몇 단위당 원화인지 (한국은행 표기와 같게 엔/동/루피아는 100단위)
+// ecb: Frankfurter(ECB)에서도 받을 수 있는지 - 베트남 동/대만 달러는 rates.json(한국은행)에만 있음
+const CURRENCIES = [
+  { code: "USD", name: "미국 달러", flag: "us", unit: 1, ecb: true },
+  { code: "JPY", name: "일본 엔", flag: "jp", unit: 100, ecb: true },
+  { code: "EUR", name: "유럽 유로", flag: "eu", unit: 1, ecb: true },
+  { code: "CNY", name: "중국 위안", flag: "cn", unit: 1, ecb: true },
+  { code: "VND", name: "베트남 동", flag: "vn", unit: 100, ecb: false },
+  { code: "HKD", name: "홍콩 달러", flag: "hk", unit: 1, ecb: true },
+  { code: "TWD", name: "대만 달러", flag: "tw", unit: 1, ecb: false },
+  { code: "THB", name: "태국 바트", flag: "th", unit: 1, ecb: true },
+  { code: "SGD", name: "싱가포르 달러", flag: "sg", unit: 1, ecb: true },
+  { code: "PHP", name: "필리핀 페소", flag: "ph", unit: 1, ecb: true },
+  { code: "IDR", name: "인도네시아 루피아", flag: "id", unit: 100, ecb: true },
+  { code: "MYR", name: "말레이시아 링깃", flag: "my", unit: 1, ecb: true },
+  { code: "GBP", name: "영국 파운드", flag: "gb", unit: 1, ecb: true },
+  { code: "CAD", name: "캐나다 달러", flag: "ca", unit: 1, ecb: true },
+  { code: "AUD", name: "호주 달러", flag: "au", unit: 1, ecb: true },
+  { code: "NZD", name: "뉴질랜드 달러", flag: "nz", unit: 1, ecb: true },
+  { code: "CHF", name: "스위스 프랑", flag: "ch", unit: 1, ecb: true },
+];
+// 같은 폴더의 rates.json(fetch_rates.py가 만든 한국은행 데이터). 없으면 Frankfurter로 대체.
+let bok = null;
+const $ = id => document.getElementById(id);
+const store = {
+  get(k) { try { return JSON.parse(localStorage.getItem(k)); } catch { return null; } },
+  set(k, v) { try { localStorage.setItem(k, JSON.stringify(v)); } catch {} },
+};
+let current = store.get("fx.cur") || "USD";
+let series = [];
+
+function ymd(d) { return d.toISOString().slice(0, 10); }
+function fmt(v, digits) {
+  digits ??= v >= 100 ? 2 : 3;
+  return v.toLocaleString("ko-KR", { minimumFractionDigits: digits, maximumFractionDigits: digits });
+}
+function median(sorted) {
+  const n = sorted.length, m = n >> 1;
+  return n % 2 ? sorted[m] : (sorted[m - 1] + sorted[m]) / 2;
+}
+
+// 10년 중 현재보다 낮았던 날의 비율(%). 낮을수록 지금이 싼 것.
+function pctOf(sortedVals, now) {
+  const below = sortedVals.findIndex(v => v >= now);
+  return (below < 0 ? sortedVals.length : below) / sortedVals.length * 100;
+}
+// 통화별 현재 위치(%) - rates.json이 있을 때만 전 통화를 한 번에 계산할 수 있음
+let rank = {};
+function computeRank() {
+  rank = {};
+  if (!bok) return;
+  for (const [code, s] of Object.entries(bok.series)) {
+    const vals = s.values.filter(v => v != null);
+    if (!vals.length) continue;
+    rank[code] = pctOf([...vals].sort((a, b) => a - b), vals[vals.length - 1]);
+  }
+}
+
+function renderChips() {
+  $("chips").innerHTML = "";
+  // 매일 데이터 기준 싼 순서(하위 %가 낮은 순)로 배치. 순위를 모르면 기본 순서 유지.
+  const order = CURRENCIES.map((c, i) => ({ c, i })).sort((a, b) =>
+    ((rank[a.c.code] ?? 1e9) - (rank[b.c.code] ?? 1e9)) || (a.i - b.i)).map(x => x.c);
+  for (const c of order) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "chip";
+    b.title = `${c.name} (${c.code})`;
+    b.setAttribute("aria-pressed", c.code === current);
+    b.disabled = !available(c);
+    const f = document.createElement("span"); f.className = `fi fi-${c.flag}`;
+    const b2 = document.createElement("b"); b2.textContent = c.code;
+    b.append(f, c.name, b2);
+    if (rank[c.code] != null) {
+      const p = Math.round(rank[c.code]);
+      const em = document.createElement("em");
+      em.className = p <= 30 ? "cheap" : p >= 70 ? "dear" : "";
+      em.textContent = p + "%";
+      em.title = `지난 10년 중 ${p}%의 날이 지금보다 쌌음`;
+      b.append(em);
+    }
+    b.onclick = () => { current = c.code; store.set("fx.cur", current); renderChips(); load(); };
+    $("chips").appendChild(b);
+    // scrollIntoView는 페이지 전체를 세로로도 움직여서, 목록만 가로로 이동
+    if (c.code === current) requestAnimationFrame(() => {
+      const box = $("chips");
+      box.scrollLeft = b.offsetLeft - box.offsetLeft - (box.clientWidth - b.offsetWidth) / 2;
+    });
+  }
+}
+const available = c => bok ? !!bok.series[c.code] : c.ecb;
+
+async function loadBok() {
+  try {
+    const res = await fetch("rates.json", { cache: "no-cache" });
+    if (!res.ok) return null;
+    const d = await res.json();
+    return d && d.dates && d.series ? d : null;
+  } catch { return null; }
+}
+
+async function fetchSeries(code) {
+  if (bok) {
+    const s = bok.series[code];
+    const pts = [];
+    bok.dates.forEach((d, i) => { if (s.values[i] != null) pts.push([d, s.values[i]]); });
+    return { at: Date.parse(bok.updated), pts };
+  }
+  const end = new Date();
+  const start = new Date(end); start.setFullYear(start.getFullYear() - 10);
+  const cacheKey = "fx.series." + code;
+  const cached = store.get(cacheKey);
+  // 하루 한 번 갱신되는 데이터라 6시간 안에 받은 게 있으면 재사용
+  if (cached && Date.now() - cached.at < 6 * 3600e3) return cached;
+  const res = await fetch(`${API}/${ymd(start)}..${ymd(end)}?base=${code}&symbols=KRW`);
+  if (!res.ok) throw new Error("HTTP " + res.status);
+  const data = await res.json();
+  const unit = CURRENCIES.find(c => c.code === code).unit;
+  const pts = Object.keys(data.rates).sort().map(d => [d, data.rates[d].KRW * unit]);
+  const out = { at: Date.now(), pts };
+  store.set(cacheKey, out);
+  return out;
+}
+
+async function load(force) {
+  const cur = CURRENCIES.find(c => c.code === current);
+  $("status").className = "status";
+  $("status").textContent = "데이터를 받는 중입니다…";
+  if (force) {
+    try { localStorage.removeItem("fx.series." + current); } catch {}
+    bok = await loadBok();
+    computeRank();
+    renderChips();
+  }
+  try {
+    const { pts, at } = await fetchSeries(current);
+    if (cur.code !== current) return;
+    series = pts;
+    render(cur);
+    $("status").textContent = "마지막 확인: " + new Date(at).toLocaleString("ko-KR", { dateStyle: "short", timeStyle: "short" });
+  } catch (e) {
+    $("status").className = "status err";
+    $("status").textContent = "환율을 받지 못했습니다. 인터넷 연결을 확인한 뒤 새로고침을 눌러 주세요. (" + e.message + ")";
+  }
+}
+
+function render(cur) {
+  const vals = series.map(p => p[1]);
+  const sorted = [...vals].sort((a, b) => a - b);
+  const mean = vals.reduce((a, b) => a + b, 0) / vals.length;
+  const med = median(sorted);
+  const [lastDate, now] = series[series.length - 1];
+  const min = sorted[0], max = sorted[sorted.length - 1];
+  const minDate = series.find(p => p[1] === min)[0];
+  const maxDate = series.find(p => p[1] === max)[0];
+  const pct = pctOf(sorted, now);
+
+  const unitLabel = cur.unit === 1 ? `1 ${cur.code}` : `${cur.unit} ${cur.code}`;
+  $("heroFlag").className = `fi fi-${cur.flag}`;
+  $("nowLabel").textContent = `현재 환율 · ${cur.name} (${lastDate})`;
+  $("now").innerHTML = "";
+  $("now").append(fmt(now));
+  const sm = document.createElement("small"); sm.textContent = `원 / ${unitLabel}`; $("now").append(sm);
+  $("range").textContent = `${series[0][0]} ~ ${lastDate} · ${vals.length.toLocaleString()}일`;
+
+  const v = $("verdict");
+  if (pct >= 70) { v.className = "verdict dear"; v.textContent = `10년 중 비싼 편 (상위 ${Math.round(100 - pct)}%)`; }
+  else if (pct <= 30) { v.className = "verdict cheap"; v.textContent = `10년 중 싼 편 (하위 ${Math.round(pct)}%)`; }
+  else { v.className = "verdict mid"; v.textContent = `10년 기준 보통 수준`; }
+
+  setDiff("mean", mean, now);
+  setDiff("median", med, now);
+
+  $("pctLabel").textContent = `10년 중 위치 · 지난 10년 동안 ${pct.toFixed(0)}%의 날이 지금보다 쌌습니다`;
+  $("pin").style.left = ((now - min) / (max - min) * 100).toFixed(1) + "%";
+  $("minV").textContent = "최저 " + fmt(min);
+  $("maxV").textContent = "최고 " + fmt(max);
+
+  const year1 = series.filter(p => p[0] >= ymd(new Date(Date.now() - 365 * 864e5))).map(p => p[1]);
+  const mean1 = year1.reduce((a, b) => a + b, 0) / year1.length;
+  const rows = [
+    ["현재", fmt(now)],
+    ["10년 평균", fmt(mean)],
+    ["10년 중앙값", fmt(med)],
+    ["최근 1년 평균", fmt(mean1)],
+    [`최저 (${minDate})`, fmt(min)],
+    [`최고 (${maxDate})`, fmt(max)],
+  ];
+  $("tbl").innerHTML = "";
+  for (const [k, val] of rows) {
+    const tr = document.createElement("tr");
+    const a = document.createElement("td"); a.textContent = k;
+    const b = document.createElement("td"); b.textContent = val;
+    tr.append(a, b); $("tbl").append(tr);
+  }
+  drawChart(mean, med);
+}
+
+function setDiff(id, ref, now) {
+  $(id).textContent = fmt(ref);
+  const d = now - ref, p = d / ref * 100;
+  const el = $(id + "Diff");
+  el.className = "diff " + (d >= 0 ? "up" : "down");
+  el.textContent = `지금이 ${d >= 0 ? "+" : "−"}${fmt(Math.abs(d), ref >= 100 ? 2 : 3)}원 (${d >= 0 ? "+" : "−"}${Math.abs(p).toFixed(1)}%)`;
+}
+
+function drawChart(mean, med) {
+  const cv = $("cv");
+  if (!series.length) return;
+  const css = getComputedStyle(document.documentElement);
+  const col = n => css.getPropertyValue(n).trim();
+  const dpr = window.devicePixelRatio || 1;
+  const W = cv.clientWidth, H = cv.clientHeight;
+  cv.width = W * dpr; cv.height = H * dpr;
+  const g = cv.getContext("2d");
+  g.setTransform(dpr, 0, 0, dpr, 0, 0);
+  g.clearRect(0, 0, W, H);
+
+  const pad = { l: 8, r: 52, t: 10, b: 22 };
+  const vals = series.map(p => p[1]);
+  let lo = Math.min(...vals), hi = Math.max(...vals);
+  const m = (hi - lo) * 0.06; lo -= m; hi += m;
+  const x = i => pad.l + i / (series.length - 1) * (W - pad.l - pad.r);
+  const y = v => pad.t + (hi - v) / (hi - lo) * (H - pad.t - pad.b);
+
+  // 가로 눈금 4개
+  g.font = `11px ${col("--font-num")}`;
+  g.textBaseline = "middle";
+  for (let k = 0; k <= 3; k++) {
+    const v = lo + (hi - lo) * k / 3;
+    g.strokeStyle = col("--line"); g.lineWidth = 1;
+    g.beginPath(); g.moveTo(pad.l, y(v)); g.lineTo(W - pad.r, y(v)); g.stroke();
+    g.fillStyle = col("--muted");
+    g.fillText(Math.round(v).toLocaleString(), W - pad.r + 6, y(v));
+  }
+  // 연도 라벨 (2년 간격)
+  g.textBaseline = "alphabetic"; g.textAlign = "center";
+  let lastYear = "";
+  series.forEach((p, i) => {
+    const yr = p[0].slice(0, 4);
+    if (yr !== lastYear) {
+      lastYear = yr;
+      if (+yr % 2 === 0 && i > 20 && i < series.length - 20) {
+        g.fillStyle = col("--muted");
+        g.fillText(yr, x(i), H - 6);
+      }
+    }
+  });
+  g.textAlign = "left";
+
+  // 면적 + 선
+  g.beginPath();
+  series.forEach((p, i) => i ? g.lineTo(x(i), y(p[1])) : g.moveTo(x(i), y(p[1])));
+  g.lineTo(x(series.length - 1), H - pad.b); g.lineTo(x(0), H - pad.b); g.closePath();
+  g.fillStyle = col("--band"); g.fill();
+  g.beginPath();
+  series.forEach((p, i) => i ? g.lineTo(x(i), y(p[1])) : g.moveTo(x(i), y(p[1])));
+  g.strokeStyle = col("--accent"); g.lineWidth = 1.5; g.lineJoin = "round"; g.stroke();
+
+  // 평균/중앙값 점선
+  const ref = (v, c) => {
+    g.setLineDash([5, 4]); g.strokeStyle = col(c); g.lineWidth = 1.5;
+    g.beginPath(); g.moveTo(pad.l, y(v)); g.lineTo(W - pad.r, y(v)); g.stroke(); g.setLineDash([]);
+  };
+  ref(mean, "--dear"); ref(med, "--cheap");
+
+  // 현재 점
+  const li = series.length - 1;
+  g.beginPath(); g.arc(x(li), y(series[li][1]), 4, 0, Math.PI * 2);
+  g.fillStyle = col("--accent"); g.fill();
+  g.strokeStyle = col("--surface"); g.lineWidth = 2; g.stroke();
+}
+
+$("refresh").onclick = () => load(true);
+window.addEventListener("resize", () => series.length && drawChart(...currentRefs()));
+function currentRefs() {
+  const vals = series.map(p => p[1]);
+  const sorted = [...vals].sort((a, b) => a - b);
+  return [vals.reduce((a, b) => a + b, 0) / vals.length, median(sorted)];
+}
+matchMedia("(prefers-color-scheme: dark)").addEventListener?.("change", () => series.length && drawChart(...currentRefs()));
+
+(async () => {
+  bok = await loadBok();
+  $("foot").textContent = bok
+    ? `데이터: 한국은행 ECOS 매매기준율 (${bok.updated.replace("T", " ")} 기준). 은행 영업일마다 고시되며, 실제 환전할 때는 은행 수수료가 더해집니다.`
+    : "데이터: 유럽중앙은행(ECB) 기준환율, Frankfurter API. 한국시간 밤에 하루 한 번 갱신되며 은행 매매기준율과 몇 원 차이가 날 수 있습니다. 베트남 동·대만 달러는 한국은행 데이터(rates.json)가 있을 때만 볼 수 있습니다.";
+  computeRank();
+  const cur = CURRENCIES.find(c => c.code === current);
+  if (!cur || !available(cur)) current = "USD";
+  // 처음 여는 사람은 오늘 가장 싼 통화부터 보여줌
+  if (store.get("fx.cur") == null && Object.keys(rank).length)
+    current = Object.entries(rank).sort((a, b) => a[1] - b[1])[0][0];
+  renderChips();
+  load();
+})();
+</script>
+</body>
+</html>

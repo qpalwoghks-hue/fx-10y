@@ -1,0 +1,5 @@
+# ECOS 인증키 - GitHub에는 Secret(ECOS_API_KEY)으로만 등록
+ecos_key.txt
+ecos_key.txt.txt
+*.tmp
+__pycache__/
